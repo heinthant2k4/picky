@@ -6,7 +6,7 @@ device = Dobot('/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Con
 print("Connecting to Dobot...")
 
 #variable
-margin = 0.25
+margin = 0.5
 
 #Functions
 def go_to_block(cordx, cordy, cordz):
@@ -17,8 +17,12 @@ def stack_from_block(cordx, cordy, margin, cycle):
                 z_margin = home[2] + ((cycle + margin) * gap[2])
                 x_pos = home[0] + (cordx * gap[0])
                 y_pos = home[1] + (cordy * gap[1])
-                device.move_to(x=home[0], y=home[1], z=z_margin, r=0)  # Move up a margin at 0 0
-                device.move_to(x=x_pos, y=y_pos, z=z_margin, r=0)  # move to x y with margin
+                if cycle == 1:
+                        device.move_to(x=home[0], y=home[1], z=z_margin, r=0)  # Move up a margin at 0 0
+                        device.move_to(x=x_pos, y=y_pos, z=z_margin, r=0)  # move to x y with margin
+                else:
+                        device.move_to(x=home[0], y=home[1], z=home[2] + ((cycle -1 + margin) * gap[2]), r=0)  # Move up a margin at 0 0
+                        device.move_to(x=x_pos, y=y_pos, z=home[2] + ((cycle -1 + margin) * gap[2]), r=0)  # move to x y with margin        
                 device.move_to(x=x_pos, y=y_pos, z=home[2] + (1 * gap[2]), r=0)  # move down to block
                 device.suck(True)  # enable suction
                 # Move back up, with extra height if cycle == 1
@@ -51,7 +55,6 @@ print(gap)
 print("Done Calibration, moving back")
 go_to_block(1, 1, 1+margin)
 go_to_block(0, 0, 1+margin)
-go_to_block(0, 0, 1)
 
 input("stack up block 1 1 1?")
 stack_from_block(1, 1, margin, 1)
