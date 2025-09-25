@@ -62,6 +62,9 @@ def SamplePatchAvgHsv(Frame, Cx, Cy, Radius=6):
 import cv2 as cv
 import numpy as np
 from pydobot import Dobot
+import os
+import json
+
 # import times
 
 print(f"\nStarting the program...")
@@ -174,15 +177,28 @@ def stack_from_block(cordx, cordy, margin, cycle):
 
 # device.home()
 
-input("Home?")
-((x, y, z, r),(j1, j2, j3, j4)) = device.get_pose()
-home = [x, y ,z]
-print(home)
+# Calibration persistence via JSON
+calibration_file = "calibration.json"
+if os.path.exists(calibration_file):
+        with open(calibration_file, "r") as f:
+                calibration = json.load(f)
+        home = calibration["home"]
+        gap = calibration["gap"]
+        print("Loaded calibration:", home, gap)
+else:
+        input("Home?")
+        ((x, y, z, r),(j1, j2, j3, j4)) = device.get_pose()
+        home = [x, y ,z]
+        print(home)
 
-input("Calibrate at block 1 1 1?")
-((x, y, z, r),(j1, j2, j3, j4)) = device.get_pose()
-gap = [x - home[0], y - home[1], z - home[2]]
-print(gap)
+        input("Calibrate at block 1 1 1?")
+        ((x, y, z, r),(j1, j2, j3, j4)) = device.get_pose()
+        gap = [x - home[0], y - home[1], z - home[2]]
+        print(gap)
+        calibration = {"home": home, "gap": gap}
+        with open(calibration_file, "w") as f:
+                json.dump(calibration, f)
+        print("Calibration saved.")
 
 print("Done Calibration, moving back")
 go_to_block(1, 1, 1+margin)
