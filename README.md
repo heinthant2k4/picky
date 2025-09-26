@@ -1,7 +1,4 @@
-# doBot
-Here’s a complete **GitHub README.md** draft for your project. I’ve structured it to be beginner-friendly, thorough, and professional, covering installation, usage, modules, and troubleshooting.
 
----
 
 # 🤖 Dobot Cube Stacking Competition System
 
