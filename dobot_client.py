@@ -164,6 +164,11 @@ class DobotMotionClient(DobotClient):
         params = bytes((mode_movj_xyz,)) + struct.pack("<4f", x, y, z, r)
         return self._queue_index(self._request(command_id=84, control=0x03, params=params))
 
+    def set_suction(self, enabled: bool) -> int:
+        """Queue a suction-cup on/off command; this never moves an axis."""
+        params = bytes((0x01, int(enabled)))
+        return self._queue_index(self._request(command_id=62, control=0x03, params=params))
+
     def queued_command_index(self) -> int:
         return self._queue_index(self._request(command_id=246))
 
