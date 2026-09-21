@@ -20,7 +20,17 @@ from dobot_client import DobotClient, Pose
 DEFAULT_PORT = os.environ.get("DOBOT_PORT", "COM9")
 DEFAULT_CAMERA_INDEX = int(os.environ.get("DOBOT_CAMERA_INDEX", 1))
 CALIBRATION_PATH = Path(__file__).with_name("calibration.json")
-VALID_COLOURS = ("R", "G", "B", "Y")
+VALID_COLOURS = ("R", "O", "Y", "G", "B", "P")
+# Tuned with the connected camera. OpenCV hue ranges from 0 to 179.
+RED_LOW_HUE_MAX = 3
+RED_HIGH_HUE_MIN = 160
+ORANGE_HUE_RANGE = (4, 19)
+YELLOW_HUE_RANGE = (20, 35)
+GREEN_HUE_RANGE = (36, 85)
+BLUE_HUE_RANGE = (86, 125)
+PURPLE_HUE_RANGE = (126, 159)
+MIN_SATURATION = 40
+MIN_VALUE = 35
 
 
 @dataclass(frozen=True)
@@ -53,17 +63,41 @@ class Calibration:
 
 def classify_colour(hsv: np.ndarray) -> str:
     hue, saturation, value = (float(component) for component in hsv)
-    if value < 50 or saturation < 40:
+    if value < MIN_VALUE or saturation < MIN_SATURATION:
         return "N"
-    if 0 <= hue <= 10 or 160 <= hue <= 179:
+    if 0 <= hue <= RED_LOW_HUE_MAX or RED_HIGH_HUE_MIN <= hue <= 179:
         return "R"
-    if 20 <= hue <= 35:
+    if ORANGE_HUE_RANGE[0] <= hue <= ORANGE_HUE_RANGE[1]:
+        return "O"
+    if YELLOW_HUE_RANGE[0] <= hue <= YELLOW_HUE_RANGE[1]:
         return "Y"
-    if 36 <= hue <= 85:
+    if GREEN_HUE_RANGE[0] <= hue <= GREEN_HUE_RANGE[1]:
         return "G"
-    if 86 <= hue <= 125:
+    if BLUE_HUE_RANGE[0] <= hue <= BLUE_HUE_RANGE[1]:
         return "B"
+    if PURPLE_HUE_RANGE[0] <= hue <= PURPLE_HUE_RANGE[1]:
+        return "P"
     return "?"
+
+
+def preprocess_frame(frame: np.ndarray) -> np.ndarray:
+    """Normalize uneven brightness while preserving colour information.
+
+    CLAHE acts only on the LAB luminance channel, so it lifts shadows and
+    controls highlights without applying a scene-dependent colour cast. A
+    light blur then makes the small HSV sample less sensitive to sensor noise.
+    """
+    lab = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
+    lightness, channel_a, channel_b = cv.split(lab)
+    clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    normalized = cv.merge((clahe.apply(lightness), channel_a, channel_b))
+    return cv.GaussianBlur(cv.cvtColor(normalized, cv.COLOR_LAB2BGR), (3, 3), 0)
+
+
+def sample_patch_hsv(hsv_frame: np.ndarray, x: int, y: int, radius: int = 6) -> np.ndarray:
+    """Return the median HSV from a patch, rejecting small glare/noise outliers."""
+    patch = hsv_frame[max(0, y - radius):y + radius + 1, max(0, x - radius):x + radius + 1]
+    return np.median(patch.reshape(-1, 3), axis=0)
 
 
 def detect_grid(frame: np.ndarray) -> tuple[np.ndarray, list[tuple[tuple[int, int], tuple[int, int]]]]:
@@ -77,12 +111,12 @@ def detect_grid(frame: np.ndarray) -> tuple[np.ndarray, list[tuple[tuple[int, in
         for row in offsets for col in offsets
     ]
     colours = np.full((3, 3), "?", dtype="U1")
-    hsv_frame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+    normalized_frame = preprocess_frame(frame)
+    hsv_frame = cv.cvtColor(normalized_frame, cv.COLOR_BGR2HSV)
     for index, (top_left, bottom_right) in enumerate(rectangles):
         x = int(np.clip((top_left[0] + bottom_right[0]) // 2, 0, width - 1))
         y = int(np.clip((top_left[1] + bottom_right[1]) // 2, 0, height - 1))
-        patch = hsv_frame[max(0, y - 6):y + 7, max(0, x - 6):x + 7]
-        colours[index // 3, index % 3] = classify_colour(patch.mean(axis=(0, 1)))
+        colours[index // 3, index % 3] = classify_colour(sample_patch_hsv(hsv_frame, x, y))
     return colours, rectangles
 
 
